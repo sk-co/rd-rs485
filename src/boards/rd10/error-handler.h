@@ -1,0 +1,7 @@
+#ifndef LORAWAN_DEV_SRC_BOARDS_RAK811_ERROR_HANDLER_H_
+#define LORAWAN_DEV_SRC_BOARDS_RAK811_ERROR_HANDLER_H_
+
+void ErrorHandler(const char* str);
+void IrqErrorHandler();
+
+#endif //LORAWAN_DEV_SRC_BOARDS_RAK811_ERROR_HANDLER_H_

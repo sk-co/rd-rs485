@@ -1,0 +1,20 @@
+project(utils)
+cmake_minimum_required(VERSION 3.16)
+
+file(GLOB ${PROJECT_NAME}_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    )
+
+add_library(${PROJECT_NAME} OBJECT EXCLUDE_FROM_ALL ${${PROJECT_NAME}_SOURCES})
+
+if(LOG_LEVEL)
+  target_compile_definitions(${PROJECT_NAME} PUBLIC -DLOG_LEVEL=${LOG_LEVEL})
+endif()
+
+target_include_directories( ${PROJECT_NAME} PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../common
+#    $<TARGET_PROPERTY:secure_element,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:board,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:system,INTERFACE_INCLUDE_DIRECTORIES>
+    )
