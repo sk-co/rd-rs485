@@ -9,8 +9,10 @@ constexpr auto kNChannels = 4;
 constexpr auto kStorageSize = 100;
 constexpr auto kWdgPeriodMs = 5000;
 constexpr auto kAutoRebootTimeMs = 30000;
-constexpr auto kWaitAfterGenerationMs = 20;
-constexpr auto kFDataLen = 16000;
+constexpr auto kWaitAfterGenerationMs = 100;
+constexpr auto kFDataLen = 16000
+  ;
+constexpr auto kFilterLevel = 7;
 
 constexpr auto kFStart = 450;
 constexpr auto kFEnd = 1200;

@@ -10,7 +10,7 @@ namespace app {
 
 class FAnswerReader {
  public:
-  static constexpr auto kBufLen_ = 10000;
+  static constexpr auto kBufLen_ = 9000;
   static uint16_t buffer_[kBufLen_];
 
   FAnswerReader(PinNames pin_name_out_en, PinNames pin_name_in_en,
@@ -35,6 +35,8 @@ class FAnswerReader {
   Adc_t *adc_ = nullptr;
   AdcChannelId_t channel_id_ = {};
   ext::Ram23k256 *ram_ = nullptr;
+
+  uint32_t dbg_data[100] = {};
 };
 
 }

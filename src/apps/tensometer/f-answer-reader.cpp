@@ -1,4 +1,6 @@
 #include "f-answer-reader.h"
+#include <cmath>
+#include <algorithm>
 #include "board-adc.h"
 #include "board-delay.h"
 #include "app_config.h"
@@ -26,7 +28,6 @@ proto::Errors FAnswerReader::ReadData() {
   board::GpioWrite(&pin_in_en_, 1);
   DelayMs(1);
 //  board::AdcStart(adc_);
-
   board::AdcStartDma(adc_, buffer_, kBufLen_);
   while(true){
     if(board::AdcWaitComplete(adc_)) {
@@ -36,81 +37,25 @@ proto::Errors FAnswerReader::ReadData() {
   }
   board::AdcStop(adc_);
   return proto::Errors::NO;
-
-//  // Первый блок.
-//  if(ReadBlockData()) {
-//    board::AdcStop(adc_);
-//    board::GpioWrite(&pin_in_en_, 0);
-//    return proto::Errors::ADC_ERROR;
-//  }
-//  if(!ram_->Write(0, reinterpret_cast<uint8_t*>(buffer_), 2*kBufLen_)) {
-//    board::AdcStop(adc_);
-//    board::GpioWrite(&pin_in_en_, 0);
-//    return proto::Errors::RAM_ERROR;
-//  }
-//  // Второй блок.
-//  if(ReadBlockData()) {
-//    board::AdcStop(adc_);
-//    board::GpioWrite(&pin_in_en_, 0);
-//    return proto::Errors::ADC_ERROR;
-//  }
-//  if(!ram_->Write(2*kBufLen_, reinterpret_cast<uint8_t*>(buffer_), 2*kBufLen_)) {
-//    board::AdcStop(adc_);
-//    board::GpioWrite(&pin_in_en_, 0);
-//    return proto::Errors::RAM_ERROR;
-//  }
-  // Третий блок.
-  if(ReadBlockData()) {
-    board::AdcStop(adc_);
-    board::GpioWrite(&pin_in_en_, 0);
-    return proto::Errors::ADC_ERROR;
-  }
-  board::AdcStop(adc_);
-  board::GpioWrite(&pin_in_en_, 0);
-  return proto::Errors::NO;
 }
 proto::Errors FAnswerReader::CalculateFreq(float *freq) {
   *freq = 0;
-  constexpr auto kFilterLevel = 5;
-//  BlockResult blocks[3] = {};
-//  // Обрабатываем сначала блок в буффере.
-  FilterData(kFilterLevel, buffer_, kBufLen_);
-//  blocks[0] = ProcessBlock(buffer_, kBufLen_);
+  FilterData(conf::kFilterLevel, buffer_, kBufLen_);
+  FilterData(5, buffer_, kBufLen_);
   BlockResult br = {};
-  for(uint32_t i=0; i < 10; ++i){
-    BlockResult br_i = ProcessBlock(buffer_ + i*50, kBufLen_ - i*100);
-//    br.samples += br_i.last_i - br_i.first_i + 1;
-//    br.zero_count += br_i.zero_count;
+  for(uint32_t i=0; i < 16; ++i){
+    BlockResult br_i = ProcessBlock(buffer_ + i*100, kBufLen_ - i*200);
     br.samples += br_i.last_i - br_i.first_i;
     br.zero_count += br_i.zero_count - 1;
+//    LOG_TRC("s:%u,z:%u,f:%f\n", br_i.last_i - br_i.first_i, br_i.zero_count - 1,
+//            (br_i.zero_count - 1)/float(br_i.last_i - br_i.first_i));
+//    LOG_FLUSH();
   }
   if(br.samples == 0) {
     return proto::Errors::NO;
   }
   *freq = float(br.zero_count / double(br.samples * adc_->period_mks/1000000.0));
   return proto::Errors::NO;
-//  // Считываем и обрабатываем второй блок.
-//  if(!ram_->Read(0, reinterpret_cast<uint8_t*>(buffer_), 2*kBufLen_)) {
-//    return proto::Errors::RAM_ERROR;
-//  }
-//  FilterData(kFilterLevel, buffer_, kBufLen_);
-//  blocks[1] = ProcessBlock(buffer_, kBufLen_);
-//  // Считываем и обрабатываем третий блок.
-//  if(!ram_->Read(2*kBufLen_, reinterpret_cast<uint8_t*>(buffer_), 2*kBufLen_)) {
-//    return proto::Errors::RAM_ERROR;
-//  }
-//  FilterData(kFilterLevel, buffer_, kBufLen_);
-//  blocks[2] = ProcessBlock(buffer_, kBufLen_);
-  // Вычисляем частоту.
-//  uint32_t samples = (blocks[0].last_i - blocks[0].first_i + 1)
-//    + (blocks[1].last_i - blocks[1].first_i + 1)
-//    + (blocks[2].last_i - blocks[2].first_i + 1);
-//  if(samples == 0) {
-//    return proto::Errors::NO;
-//  }
-//  uint32_t count = blocks[0].zero_count + blocks[1].zero_count + blocks[2].zero_count;
-//  *freq = float(count / double(samples * adc_->period_mks/1000000.0));
-//  return proto::Errors::NO;
 }
 int FAnswerReader::ReadBlockData() {
   for (unsigned short & i : buffer_) {
@@ -130,24 +75,80 @@ void FAnswerReader::FilterData(uint32_t level, uint16_t* data, uint32_t len) {
     data[i] = sum/level;
   }
 }
+//FAnswerReader::BlockResult FAnswerReader::ProcessBlock(const uint16_t *data, uint32_t len) {
+//  // Считаем средний уровень сигнала.
+//  float average = 0;
+//  for(uint32_t i=0; i < len; ++i)
+//    average += float(data[i]);
+//  average = average / len;
+//  // Считаем средний уровень максимумов.
+//  float average_max = 0;
+//  int max_count = 0;
+//  for (uint32_t i = 2; i < len; ++i) {
+//    if ((data[i - 2] < data[i - 1]) && (data[i] < data[i - 1]) && (float(data[i]) > average)) {
+//      max_count++;
+//      average_max += float(data[i - 1]);
+//    }
+//  }
+//  average_max = average_max / float(max_count);
+//  // Определяем порог между средним уровнем и максимумом.
+//  float threshold = average + (average_max - average) / 2;
+//  // Считаем кол-во переходов через средний уровень снизу вверх (т.е. нулей).
+//  // Очередной нуль берем только после достижения порога.
+//  BlockResult br = {};
+//  br.first_i = -1;
+//  br.last_i = -1;
+//  br.zero_count = 0;
+//  uint32_t zero_counter = 0;
+//  uint32_t dbg_data[100] = {};  // Для отладки
+//  bool find_zero = true;
+//  for (uint32_t i = 10; i < len - 10; ++i) {
+//    zero_counter++;
+//    if (find_zero) {
+//      if ((float(data[i - 1]) < average) && (float(data[i]) >= average)) {
+//        if(br.zero_count < 100 )
+//          dbg_data[br.zero_count ] = zero_counter;
+//        zero_counter = 0;
+//        br.zero_count++;
+//        if (br.first_i < 0)
+//          br.first_i = i;
+//        br.last_i = i;
+//        find_zero = false;
+//      }
+//    }
+//    if (float(data[i]) >= threshold) {
+//      find_zero = true;
+//    }
+//  }
+//  dbg_data[99] = 0;
+//  return br;
+//}
 FAnswerReader::BlockResult FAnswerReader::ProcessBlock(const uint16_t *data, uint32_t len) {
-// Считаем средний уровень сигнала.
-  float average = 0;
-  for(uint32_t i=0; i < len; ++i)
-    average += float(data[i]);
-  average = average / len;
-  // Считаем средний уровень максимумов.
-  float average_max = 0;
-  int max_count = 0;
-  for (uint32_t i = 2; i < len; ++i) {
-    if ((data[i - 2] < data[i - 1]) && (data[i] < data[i - 1]) && (float(data[i]) > average)) {
-      max_count++;
-      average_max += float(data[i - 1]);
-    }
+  struct StepInfo {
+    uint32_t ind_start;
+    float median;
+    float max;
+    float min;
+    float max_thr;
+    float min_thr;
+  };
+  StepInfo si[80] = {};
+  uint32_t si_len = 0;
+  constexpr auto kStepLen = 150;
+  for(uint32_t i=0; i < (len - kStepLen); i+=kStepLen) {
+    si[si_len].ind_start = i;
+    for(uint32_t j=0; j < kStepLen; ++j)
+      if(si[si_len].max < data[i+j])
+        si[si_len].max = data[i+j];
+    si[si_len].min = 0xFFFF;
+    for(uint32_t j=0; j < kStepLen; ++j)
+      if(si[si_len].min > data[i+j])
+        si[si_len].min = data[i+j];
+    si[si_len].median = si[si_len].min + (si[si_len].max - si[si_len].min)/2;
+    si[si_len].max_thr = si[si_len].median + (si[si_len].max - si[si_len].median)/3;
+    si[si_len].min_thr = si[si_len].median - (si[si_len].median - si[si_len].min)/3;
+    si_len++;
   }
-  average_max = average_max / float(max_count);
-  // Определяем порог между средним уровнем и максимумом.
-  float threshold = average + (average_max - average) / 2;
   // Считаем кол-во переходов через средний уровень снизу вверх (т.е. нулей).
   // Очередной нуль берем только после достижения порога.
   BlockResult br = {};
@@ -155,12 +156,14 @@ FAnswerReader::BlockResult FAnswerReader::ProcessBlock(const uint16_t *data, uin
   br.last_i = -1;
   br.zero_count = 0;
   uint32_t zero_counter = 0;
-  uint32_t dbg_data[100] = {};  // Для отладки
   bool find_zero = true;
+  uint32_t si_ind = 0;
   for (uint32_t i = 10; i < len - 10; ++i) {
+    if(i > (si_ind+1)*kStepLen)
+      si_ind++;
     zero_counter++;
     if (find_zero) {
-      if ((float(data[i - 1]) < average) && (float(data[i]) >= average)) {
+      if ((float(data[i - 1]) <= si[si_ind].median) && (float(data[i+1]) >= si[si_ind].median)) {
         if(br.zero_count < 100 )
           dbg_data[br.zero_count ] = zero_counter;
         zero_counter = 0;
@@ -171,7 +174,7 @@ FAnswerReader::BlockResult FAnswerReader::ProcessBlock(const uint16_t *data, uin
         find_zero = false;
       }
     }
-    if (float(data[i]) >= threshold) {
+    if (float(data[i]) < si[si_ind].min_thr) {
       find_zero = true;
     }
   }
@@ -179,10 +182,15 @@ FAnswerReader::BlockResult FAnswerReader::ProcessBlock(const uint16_t *data, uin
   return br;
 }
 void FAnswerReader::OutData() {
-  ram_->Read(0, reinterpret_cast<uint8_t*>(buffer_), 2*kBufLen_);
-  FilterData(5, buffer_, kBufLen_);
-  for(uint32_t i=0; i < kBufLen_; ++i){
-    LOG_TRC("%u,", buffer_[i]);
+  for(unsigned short i : buffer_){
+    LOG_TRC("%u,", i);
+    LOG_FLUSH();
+    DelayMks(100);
+  }
+  LOG_TRC("dbg_data:\r\n");
+  LOG_FLUSH();
+  for(uint32_t i: dbg_data){
+    LOG_TRC("%u,", i);
     LOG_FLUSH();
     DelayMs(1);
   }
