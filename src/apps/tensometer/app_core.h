@@ -8,6 +8,8 @@ namespace app {
 enum class State {
   NO,
   IDLE,
+  LED_ON,
+  SLEEP,
   START_MEASUREMENT,
   SENDING_MEASUREMENT,
   ERROR,

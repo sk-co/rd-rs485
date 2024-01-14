@@ -25,10 +25,21 @@ class FAnswerReader {
     int32_t last_i;
     uint32_t zero_count;
     uint32_t samples;
+    bool is_good_value;
+  };
+  struct DataStat {
+    uint32_t ind_start;
+    float median;
+    float max;
+    float min;
+    float max_thr;
+    float min_thr;
   };
   int ReadBlockData();
   void FilterData(uint32_t level, uint16_t* data, uint32_t len);
   BlockResult ProcessBlock(const uint16_t* data, uint32_t len);
+  bool ValidatePeriods(uint32_t len);
+  DataStat GetStat(const uint16_t *data, uint32_t len);
 
   Gpio_t pin_out_en_ = {};
   Gpio_t pin_in_en_ = {};
@@ -36,7 +47,8 @@ class FAnswerReader {
   AdcChannelId_t channel_id_ = {};
   ext::Ram23k256 *ram_ = nullptr;
 
-  uint32_t dbg_data[100] = {};
+  static constexpr auto kPeriodsLen_ = 200;
+  uint16_t periods[kPeriodsLen_] = {};
 };
 
 }

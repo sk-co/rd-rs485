@@ -35,6 +35,11 @@ class Led {
       return;
     board::GpioWrite(pin_, state_);
   }
+  uint32_t GetState() {
+    if(!pin_)
+      return !active_level_;
+    return bool(board::GpioRead(pin_)) == active_level_;
+  }
  private:
   Gpio_t *pin_ = nullptr;
   bool active_level_ = true;

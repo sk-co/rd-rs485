@@ -2,11 +2,12 @@
 #include "app_objects.h"
 #include "app_config.h"
 #include "board-delay.h"
-#include "board-rtc.h"
 #include "gtime.h"
 #include "board.h"
 #include "board-peripherals.h"
 #include "log.h"
+#include "board-lpm.h"
+#include "board-rtc.h"
 
 namespace {
 
@@ -25,16 +26,17 @@ uint32_t storage_size_ = 0;
 namespace app {
 
 proto::Errors Measurement(uint32_t channel, proto::MeasurementAns *result) {
+  board::InitAdc();
   volatile auto start = GetSysMs();
   // Генерируем возбуждающий сигнал.
   Obj::ImpulseGenerator(channel)->Generate(conf::kFStart, conf::kFEnd, conf::kImpCount);
-//  Obj::ImpulseGenerator(channel)->Generate(conf::kFStart, conf::kFEnd, conf::kImpCount);
   // Ждем переходные процессы.
   DelayMs(conf::kWaitAfterGenerationMs);
   // Считываем сигнал, определяем частоту.
   start = GetSysMs();
   auto error = Obj::FreqReader(channel)->ReadData();
   if(error != proto::Errors::NO) {
+    board::DeInitAdc();
     return error;
   }
   volatile auto elapsed_time = GetSysMs() - start;
@@ -42,6 +44,7 @@ proto::Errors Measurement(uint32_t channel, proto::MeasurementAns *result) {
   Obj::FreqReader(channel)->CalculateFreq(&result->frequency);
   // Определяем температуру.
   if(Obj::TemperatureSensor(channel)->GetValue(&result->temperature)) {
+    board::DeInitAdc();
     return proto::Errors::ADC_ERROR;
   }
   result->channel = channel + 1;
@@ -49,51 +52,40 @@ proto::Errors Measurement(uint32_t channel, proto::MeasurementAns *result) {
   result->time_utc_ms = app::time::GetUTCTime();
   elapsed_time = GetSysMs() - start;
 
+//  // Вывод сырых данных от тензометра в uart.
 //  Obj::FreqReader(channel)->OutData();
 
+  board::DeInitAdc();
   return proto::Errors::NO;
 }
 
 void Init() {
   error_ = proto::Errors::NO;
   storage_size_ = 0;
+  // Индикация успешного запуска платы.
+  for(auto i=0; i < 3; ++i) {
+    board::led1.On();
+    DelayMs(100);
+    board::led1.Off();
+    DelayMs(200);
+  }
   Obj::CommandProcessor().SetCmdHandler(CmdHandler);
   Obj::CommandProcessor().Start();
-  if(Obj::Ram().Init()) {
-    error_ = proto::Errors::RAM_ERROR;
-    state_ = State::ERROR;
-    end_wait_time_ms = GetSysMs() + conf::kAutoRebootTimeMs;
-    return;
-  }
-  // Запись/чтение в дебаге занимает 150 мс.
-  volatile auto start = GetSysMs();
-  if(!Obj::Ram().Test()) {
-    error_ = proto::Errors::RAM_ERROR;
-    state_ = State::ERROR;
-    end_wait_time_ms = GetSysMs() + conf::kAutoRebootTimeMs;
-    return;
-  }
-  volatile auto elapsed_time = GetSysMs() - start;
 
-  // Для проверки заполняем хранилище.
-  storage_size_ = 3;
-  for(uint32_t i=0; i < storage_size_; ++i) {
-    storage_[i].channel = channel_;
-    storage_[i].frequency = 812.4f + i*12;
-    storage_[i].temperature = 25 + i;
-    storage_[i].reason = uint8_t(proto::MeasurementReason::SIGNAL);
-    storage_[i].time_utc_ms = app::time::GetUTCTime() + i*1000;
-  }
-
-//  proto::MsgHdr hdr{};
-//  hdr.cmd.cmd_type = uint8_t(proto::CmdType::MEASUREMENT);
-//  hdr.size = sizeof(proto::MeasurementReq);
-//  proto::MeasurementReq data{1};
-//  Obj::CommandProcessor().SendMsg(hdr, reinterpret_cast<uint8_t*>(&data));
+//  // Для проверки заполняем хранилище.
+//  storage_size_ = 3;
+//  for(uint32_t i=0; i < storage_size_; ++i) {
+//    storage_[i].channel = channel_;
+//    storage_[i].frequency = 812.4f + i*12;
+//    storage_[i].temperature = 25 + i;
+//    storage_[i].reason = uint8_t(proto::MeasurementReason::SIGNAL);
+//    storage_[i].time_utc_ms = app::time::GetUTCTime() + i*1000;
+//  }
 
   Obj::ExtSignal().StartWait();
   state_ = State::IDLE;
 
+//  // Проверка генерации импульса.
 //  while(true){
 //    Obj::ImpulseGenerator(0)->Generate(conf::kFStart, conf::kFEnd, conf::kImpCount);
 //  }
@@ -107,7 +99,27 @@ void Work() {
     }
   }
   switch (state_) {
+    case State::IDLE: {
+      board::led1.On();
+      end_wait_time_ms = board::GetSysTick() + 50;
+      state_ = State::LED_ON;
+    }
+      break;
+    case State::LED_ON: {
+      if(board::GetSysTick() > end_wait_time_ms) {
+        board::led1.Off();
+        state_ = State::SLEEP;
+      }
+    }
+      break;
+    case State::SLEEP: {
+      RtcStartAlarm(RtcMs2Tick(conf::kLedPeriodMs));
+      board::LpmEnterSleepMode();
+      state_ = State::IDLE;
+    }
+      break;
     case State::START_MEASUREMENT: {
+      board::led1.On();
       error_ = Measurement(channel_, &measurement_);
       if(error_ != proto::Errors::NO) {
         state_ = State::ERROR;
@@ -117,6 +129,7 @@ void Work() {
               measurement_.temperature, measurement_.frequency);
       while(!LOG_IS_TRANSMITED());
       state_ = State::SENDING_MEASUREMENT;
+      board::led1.Off();
     }
       break;
     case State::SENDING_MEASUREMENT: {

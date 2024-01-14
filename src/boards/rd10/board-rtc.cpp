@@ -488,21 +488,22 @@ TimerTime_t RtcTempCompensation(TimerTime_t period, float temperature) {
  */
 [[maybe_unused]]
 void RTC_Alarm_IRQHandler(void) {
-  RTC_HandleTypeDef *hrtc = &RtcHandle;
-  // Enable low power at irq
-  LpmSetStopMode(board::LPM_RTC_ID, board::LPM_ENABLE);
-//  // Clear the EXTI's line Flag for RTC Alarm
-//  __HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
-  // Gets the AlarmA interrupt source enable status
-  if (__HAL_RTC_ALARM_GET_IT_SOURCE(hrtc, RTC_IT_ALRA) != RESET) {
-    // Gets the pending status of the AlarmA interrupt
-    if (__HAL_RTC_ALARM_GET_FLAG(hrtc, RTC_FLAG_ALRAF) != RESET) {
-      // Clear the AlarmA interrupt pending bit
-      __HAL_RTC_ALARM_CLEAR_FLAG(hrtc, RTC_FLAG_ALRAF);
-      // AlarmA callback
-      HAL_RTC_AlarmAEventCallback(hrtc);
-    }
-  }
+  HAL_RTC_AlarmIRQHandler(&RtcHandle);
+//  RTC_HandleTypeDef *hrtc = &RtcHandle;
+//  // Enable low power at irq
+////  LpmSetStopMode(board::LPM_RTC_ID, board::LPM_ENABLE);
+////  // Clear the EXTI's line Flag for RTC Alarm
+////  __HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
+//  // Gets the AlarmA interrupt source enable status
+//  if (__HAL_RTC_ALARM_GET_IT_SOURCE(hrtc, RTC_IT_ALRA) != RESET) {
+//    // Gets the pending status of the AlarmA interrupt
+//    if (__HAL_RTC_ALARM_GET_FLAG(hrtc, RTC_FLAG_ALRAF) != RESET) {
+//      // Clear the AlarmA interrupt pending bit
+//      __HAL_RTC_ALARM_CLEAR_FLAG(hrtc, RTC_FLAG_ALRAF);
+//      // AlarmA callback
+//      HAL_RTC_AlarmAEventCallback(hrtc);
+//    }
+//  }
 }
 
 /*!

@@ -90,20 +90,17 @@ void BoardEnableIrq() {
 void BoardInitMcu() {
   HAL_Init();
   SystemClockConfig();
-  HAL_Delay(50);
   // Включение тактирования портов.
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
-  HAL_Delay(50);
-  // Инициализация светодиодов.
   GpioInit(&led1_pin, LED_1_PIN, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0);
   led1.Init(&led1_pin, true);
-
-  InitUart1();
-  InitSpi1();
+  led1.On();
+  HAL_Delay(50);
+  led2.Off();
   BoardUnusedIoInit();
 }
 void InitSpi1() {
@@ -131,15 +128,10 @@ void InitAdc() {
     ErrorHandler(nullptr);
   if(AdcConfigChannel(&board::sdadc1, ADC_CN_1))
     ErrorHandler(nullptr);
-//  uint16_t data[1000] = {};
-//  board::AdcStartDma(&board::sdadc1, data, 1000);
-//  while(true) {
-//    if(board::AdcWaitComplete(&board::sdadc1))
-//      break;
-//  }
-//  volatile auto end = GetSysTick() - board::AdcGetStartTime();
-//  volatile auto speed = 1000 / float(end) * 1000;
-//  board::AdcStop(&board::sdadc1);
+}
+void DeInitAdc() {
+  AdcDeinit(&board::adc1);
+  AdcDeinit(&board::sdadc1);
 }
 void InitIWDG(uint32_t period_ms) {
   if(period_ms > 32000)
@@ -322,7 +314,7 @@ void SystemClockConfig() {
 //  /* PendSV_IRQn interrupt configuration */
 //  HAL_NVIC_SetPriority(PendSV_IRQn, 0, 0);
 
-  // 48 MHz
+  // 24 MHz
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
   RCC_PeriphCLKInitTypeDef PeriphClkInit;
@@ -339,7 +331,16 @@ void SystemClockConfig() {
 //  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;  // 48 MHz
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL3 ;  // 24 MHz
+
+//  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSI;
+//  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+//  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+//  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+////  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+//  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+//  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+//  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;  // 48 MHz
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK){
     ErrorHandler(nullptr);
   }
@@ -352,7 +353,7 @@ void SystemClockConfig() {
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)  {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)  {
     ErrorHandler(nullptr);
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART1
@@ -360,8 +361,8 @@ void SystemClockConfig() {
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
-  PeriphClkInit.SdadcClockSelection = RCC_SDADCSYSCLK_DIV8; // 6 MHz
-  PeriphClkInit.Adc1ClockSelection = RCC_ADC1PCLK2_DIV8;  // 6 MHz
+  PeriphClkInit.SdadcClockSelection = RCC_SDADCSYSCLK_DIV4; // 6 MHz
+  PeriphClkInit.Adc1ClockSelection = RCC_ADC1PCLK2_DIV4;  // 6 MHz
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
     ErrorHandler(nullptr);
   }
@@ -422,27 +423,6 @@ void BoardLowPowerHandler() {
   LpmEnterLowPower();
   __enable_irq();
 }
-//// Переход на прошивку по заданному адресу.
-//void __attribute__((optimize(0))) JumpToMainHex() {
-//  __disable_irq();
-//  // Деинициализация
-//  SysTick->CTRL = 0x0;    // @suppress("Field cannot be resolved")
-//  SysTick->LOAD = 0;
-//  SysTick->VAL = 0;
-//  HAL_RCC_DeInit();
-//  HAL_DeInit();
-//  auto addr = cpu_flash->kStartAddr_ + board::GetMainHexFR()->start_addr_;
-//  // Изменение вектора прерывания делаем в основной программе перед запуском.
-////  RCC->CIR = 0x00000000;
-////  __DMB();
-////  SCB->VTOR = addr;       // @suppress("Field cannot be resolved")
-////  __DSB();
-//  //stack pointer (to RAM) for USER app in this address
-//  __set_MSP(*((volatile uint32_t*) addr));
-//  uint32_t appJumpAddress = *((volatile uint32_t*)(addr + 4));
-//  void (*GoToApp)() = (void(*)())appJumpAddress;
-//  GoToApp();
-//}
 
 uint32_t GetSysTick() {
   return HAL_GetTick();

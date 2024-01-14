@@ -45,11 +45,13 @@ proto::Errors FAnswerReader::CalculateFreq(float *freq) {
   BlockResult br = {};
   for(uint32_t i=0; i < 16; ++i){
     BlockResult br_i = ProcessBlock(buffer_ + i*100, kBufLen_ - i*200);
+    if(!br_i.is_good_value)
+      return proto::Errors::NO;
     br.samples += br_i.last_i - br_i.first_i;
     br.zero_count += br_i.zero_count - 1;
-//    LOG_TRC("s:%u,z:%u,f:%f\n", br_i.last_i - br_i.first_i, br_i.zero_count - 1,
-//            (br_i.zero_count - 1)/float(br_i.last_i - br_i.first_i));
-//    LOG_FLUSH();
+    LOG_TRC("s:%u,z:%u,f:%f\n", br_i.last_i - br_i.first_i, br_i.zero_count - 1,
+            (br_i.zero_count - 1)/float(br_i.last_i - br_i.first_i));
+    LOG_FLUSH();
   }
   if(br.samples == 0) {
     return proto::Errors::NO;
@@ -124,61 +126,62 @@ void FAnswerReader::FilterData(uint32_t level, uint16_t* data, uint32_t len) {
 //  return br;
 //}
 FAnswerReader::BlockResult FAnswerReader::ProcessBlock(const uint16_t *data, uint32_t len) {
-  struct StepInfo {
-    uint32_t ind_start;
-    float median;
-    float max;
-    float min;
-    float max_thr;
-    float min_thr;
-  };
-  StepInfo si[80] = {};
-  uint32_t si_len = 0;
-  constexpr auto kStepLen = 150;
-  for(uint32_t i=0; i < (len - kStepLen); i+=kStepLen) {
-    si[si_len].ind_start = i;
-    for(uint32_t j=0; j < kStepLen; ++j)
-      if(si[si_len].max < data[i+j])
-        si[si_len].max = data[i+j];
-    si[si_len].min = 0xFFFF;
-    for(uint32_t j=0; j < kStepLen; ++j)
-      if(si[si_len].min > data[i+j])
-        si[si_len].min = data[i+j];
-    si[si_len].median = si[si_len].min + (si[si_len].max - si[si_len].min)/2;
-    si[si_len].max_thr = si[si_len].median + (si[si_len].max - si[si_len].median)/3;
-    si[si_len].min_thr = si[si_len].median - (si[si_len].median - si[si_len].min)/3;
-    si_len++;
-  }
+  // Вычисляем статистику по началу данных.
+  DataStat stat = GetStat(data, 150);
   // Считаем кол-во переходов через средний уровень снизу вверх (т.е. нулей).
   // Очередной нуль берем только после достижения порога.
   BlockResult br = {};
   br.first_i = -1;
   br.last_i = -1;
   br.zero_count = 0;
-  uint32_t zero_counter = 0;
-  bool find_zero = true;
-  uint32_t si_ind = 0;
-  for (uint32_t i = 10; i < len - 10; ++i) {
-    if(i > (si_ind+1)*kStepLen)
-      si_ind++;
+  br.is_good_value = false;
+  volatile uint32_t zero_counter = 0;
+  bool find_zero = false;
+  memset(periods , 0, kPeriodsLen_*sizeof(periods[0]));
+  int periods_ind = 0;
+  int average_period = 0;
+  int average_periods_count = 0;
+  for (uint32_t i = 5; i < len - 5; ++i) {
     zero_counter++;
     if (find_zero) {
-      if ((float(data[i - 1]) <= si[si_ind].median) && (float(data[i+1]) >= si[si_ind].median)) {
-        if(br.zero_count < 100 )
-          dbg_data[br.zero_count ] = zero_counter;
+      if ((float(data[i - 1]) <= stat.median) && (float(data[i+1]) >= stat.median)) {
+        // По начальным 10 значениям определяем средний период колебаний.
+        if(periods_ind > 2 && average_periods_count < 10) {
+          average_period += zero_counter;
+          average_periods_count++;
+        }
+        else if(average_periods_count == 10) {
+          average_period = average_period/average_periods_count;
+          average_periods_count++;
+        }
+        // Если период сильно меньше среднего, то продолжаем считать.
+        if(average_periods_count > 10 && zero_counter < average_period*0.8)
+          continue;
+        // Добавляем период.
+        if(periods_ind < kPeriodsLen_ ) {
+          periods[periods_ind++] = zero_counter;
+        }
+        if(zero_counter > 100)
+          zero_counter = 0;
         zero_counter = 0;
         br.zero_count++;
         if (br.first_i < 0)
-          br.first_i = i;
-        br.last_i = i;
+          br.first_i = int32_t(i);
+        br.last_i = int32_t(i);
         find_zero = false;
+        if(br.zero_count >= 2) {
+          // Пересчитываем статистику относительно последнего найденного периода.
+          // Таким образом компенсируем смещение среднего уровня.
+          stat = GetStat(data + (i - periods[periods_ind-1]), periods[periods_ind-1]);
+          continue;
+        }
       }
     }
-    if (float(data[i]) < si[si_ind].min_thr) {
+    if (float(data[i]) < stat.min_thr) {
       find_zero = true;
     }
   }
-  dbg_data[99] = 0;
+  br.is_good_value = ValidatePeriods(periods_ind);
   return br;
 }
 void FAnswerReader::OutData() {
@@ -189,10 +192,47 @@ void FAnswerReader::OutData() {
   }
   LOG_TRC("dbg_data:\r\n");
   LOG_FLUSH();
-  for(uint32_t i: dbg_data){
+  for(uint32_t i: periods){
     LOG_TRC("%u,", i);
     LOG_FLUSH();
     DelayMs(1);
   }
+}
+// Проверяем, что найденные периоды приблизительно одинаковые (отклонение 15%),
+// иначе не гармоничный сигнал.
+bool FAnswerReader::ValidatePeriods(uint32_t len) {
+  // Первый и последний период игнорируем.
+  int bad_values = 0;
+  constexpr auto kMaxBadValues = 10;
+  constexpr auto kCompareLen = 5;
+  for(uint32_t i=1; i < len- kCompareLen - 1; ++i) {
+    bool is_find = false;
+    for(uint32_t j=1; j < kCompareLen; ++j) {
+      if (periods[i] >= periods[i+j]*0.85 && periods[i] <= periods[i+j]*1.15) {
+        is_find = true;
+        break;
+      }
+    }
+    if(!is_find) {
+      if(bad_values++ > kMaxBadValues) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+FAnswerReader::DataStat FAnswerReader::GetStat(const uint16_t *data, uint32_t len) {
+  DataStat stat = {};
+  for(uint32_t j=0; j < len; ++j)
+    if(stat.max < float(data[j]))
+      stat.max = data[j];
+  stat.min = 0xFFFF;
+  for(uint32_t j=0; j < len; ++j)
+    if(stat.min > float(data[j]))
+      stat.min = data[j];
+  stat.median = stat.min + (stat.max - stat.min)/2;
+  stat.max_thr = stat.median + (stat.max - stat.median)/3;
+  stat.min_thr = stat.median - (stat.median - stat.min)/3;
+  return stat;
 }
 }

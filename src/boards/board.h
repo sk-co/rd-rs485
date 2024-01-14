@@ -106,6 +106,7 @@ void InitSpi2();
 void InitPwm(uint16_t period);
 void InitRtc();
 void InitAdc();
+void DeInitAdc();
 void PVD_On();
 uint32_t GetSysTick();
 void InitIWDG(uint32_t period_ms);

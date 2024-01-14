@@ -56,7 +56,7 @@ if(${CMAKE_BUILD_TYPE} STREQUAL Release)
   set(COMMON_C_FLAGS "${COMMON_C_FLAGS} -Os") # -flto
   set(COMMON_CXX_FLAGS "${COMMON_CXX_FLAGS} -Os") # -flto
   set(COMMON_ASM_FLAGS "${COMMON_ASM_FLAGS}" )
-  set(COMMON_LINK_FLAGS "${COMMON_LINK_FLAGS}") # -flto
+  set(COMMON_LINK_FLAGS "${COMMON_LINK_FLAGS} -u _printf_float") # -flto
 endif()
 
 # Linker flags

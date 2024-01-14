@@ -30,36 +30,19 @@ constexpr Version_t kHexVersion {
 void InitBoard() {
   board::BoardInitMcu();
   board::InitRtc();
-//  board::InitIWDG(conf::kWdgPeriodMs);
+  board::InitIWDG(conf::kWdgPeriodMs);
   board::InitUart1();
   board::InitUart2();
-  board::InitSpi1();
-  board::InitAdc();
-}
-void EnterLowPower() {
-  board::led1.Off();
-  board::SpiDeInit(&board::spi1);
-  board::UartDeInit(&board::uart1);
-  board::UartDeInit(&board::uart2);
-  board::AdcDeinit(&board::adc1);
-}
-void ExitLowPower() {
-  board::InitAdc();
-  board::InitSpi1();
-  board::InitUart1();
-  board::InitUart2();
-  LOG_INIT(board::GetLogUart(), 115200);
+//  board::InitSpi1();
+//  board::InitAdc();
 }
 
 int main() {
 //  char(dbg_show_size<sizeof(RegionNvmDataGroup1_t)>());
   InitBoard();
-  board::led1.On();
-
   LOG_INIT(board::GetLogUart(), 115200);
-  LOG_TRC("Start\n");
+  LOG_TRC("Start RD v%d.%d\n", FIRMWARE_VERSION_HI, FIRMWARE_VERSION_LO);
   while(!LOG_IS_TRANSMITED());
-
   app::Init();
   while (true) {
     app::Work();
