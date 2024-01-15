@@ -15,6 +15,9 @@ class CmdProcessor {
   void SetCmdHandler(CmdHandler cmd_handler_fn) { cmd_handler_fn_ = cmd_handler_fn; }
   [[nodiscard]] bool IsInit() { return uart_ != nullptr; }
   void Start();
+  void Stop();
+  void Pause() {uart_->ReadPause();}
+  void Resume() {uart_->ReadResume();}
   void Work();
   bool IsCanSend() {
     return state_ == State::NO || state_ == State::BAD_CRC

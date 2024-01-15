@@ -4,15 +4,12 @@
 namespace conf {
 
 // TODO: Сделать через константу в прошивке (брать с определенного адреса)
-constexpr auto kID = 1;
+constexpr auto kID = 2;
 constexpr auto kNChannels = 4;
 constexpr auto kStorageSize = 100;
 constexpr auto kLedPeriodMs = 10000;
 constexpr auto kWdgPeriodMs = 15000;
-constexpr auto kAutoRebootTimeMs = 30000;
-constexpr auto kWaitAfterGenerationMs = 50;
-constexpr auto kFDataLen = 16000
-  ;
+constexpr auto kWaitAfterGenerationMs = 20;
 constexpr auto kFilterLevel = 7;
 
 constexpr auto kFStart = 450;

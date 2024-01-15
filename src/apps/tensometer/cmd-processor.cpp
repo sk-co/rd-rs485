@@ -25,6 +25,9 @@ void CmdProcessor::Start() {
   }
   state_ = State::NO;
 }
+void CmdProcessor::Stop() {
+  uart_->StopRead();
+}
 void CmdProcessor::Work() {
   if (uart_->GetError() != IUart::Error::NO) {
     // Перезапускаем.

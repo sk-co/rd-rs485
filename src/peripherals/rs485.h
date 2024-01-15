@@ -33,6 +33,8 @@ class Rs485Interface : public IUart {
   size_t ReadRxData(uint8_t *data, size_t len) override { return rx_buf_.Read(data, len); }
   [[nodiscard]] bool IsReading() const override { return uart_->is_reading; }
   [[nodiscard]] bool IsWriting() const override { return uart_->is_writing; }
+  void ReadPause() override {is_read_pause_ = true;}
+  void ReadResume() override {is_read_pause_ = false;}
 
   void IrqHandleTx();
   void IrqHandleRx();
@@ -43,6 +45,7 @@ class Rs485Interface : public IUart {
   utils::RoundBuf<uint8_t, kRxBufferSize> rx_buf_;
   utils::StaticVector<uint8_t, kTxBufferSize> tx_buf_;
   Error error_ = Error::NO;
+  bool is_read_pause_ = false;
 };
 }
 #endif //MOLOT_SRC_PERIPHERAL_RS485_H_

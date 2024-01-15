@@ -54,6 +54,8 @@ void Rs485Interface::IrqHandleTx() {
   tx_buf_.Clear();
 }
 void Rs485Interface::IrqHandleRx() {
+  if(is_read_pause_)
+    return;
   if (!rx_buf_.PushBack(uart_->rx_byte)) {
     error_ = Error::RX_BUFFER_OVERFLOW;
   }
@@ -64,6 +66,7 @@ void Rs485Interface::IrqHandleErr() {
 bool Rs485Interface::StartRead() {
   StopRead();
   board::UartClearRxBuf(uart_);
+  is_read_pause_ = false;
   return board::UartStartRead(uart_);
 }
 void Rs485Interface::StopRead() {

@@ -1,4 +1,6 @@
 #include "temp_sensor.h"
+#include <algorithm>
+#include <array>
 #include "board-gpio.h"
 #include "board-adc.h"
 #include "board-delay.h"
@@ -232,7 +234,12 @@ int TempSensor::GetValue(int16_t *temp) {
   board::GpioWrite(&en_pin_, 1);
   DelayMs(1);
   board::AdcStart(adc_);
-  uint16_t value = board::AdcReadWithTimeout(adc_, 10);
+  std::array<uint16_t,7> values = {};
+  for(auto &value: values){
+    value = board::AdcReadWithTimeout(adc_, 10);
+  }
+  std::sort(values.begin(), values.end());
+  uint16_t value = values[3];
   board::AdcStop(adc_);
   board::GpioWrite(&en_mode_110k_pin_, 0);
   if(value == 0xFFFF) {

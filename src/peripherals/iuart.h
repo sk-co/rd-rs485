@@ -34,6 +34,8 @@ class IUart {
   virtual size_t ReadRxData(uint8_t *data, size_t len) = 0;
   virtual bool IsReading() const = 0;
   virtual bool IsWriting() const = 0;
+  virtual void ReadPause() = 0;
+  virtual void ReadResume() = 0;
 };
 
 

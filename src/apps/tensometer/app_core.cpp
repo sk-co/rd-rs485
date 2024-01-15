@@ -119,8 +119,10 @@ void Work() {
     }
       break;
     case State::START_MEASUREMENT: {
+      Obj::CommandProcessor().Pause();
       board::led1.On();
       error_ = Measurement(channel_, &measurement_);
+      Obj::CommandProcessor().Resume();
       if(error_ != proto::Errors::NO) {
         state_ = State::ERROR;
         break;
