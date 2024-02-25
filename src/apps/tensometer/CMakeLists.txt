@@ -6,7 +6,7 @@ macro(fn_set_version PROJECT V_HI V_LO)
   set(${PROJECT}_V_HI ${V_HI})
   set(${PROJECT}_V_LO ${V_LO})
 endmacro()
-fn_set_version(${PROJECT_NAME} 0 1)
+fn_set_version(${PROJECT_NAME} 1 0)
 MATH(EXPR FIRMWARE_VERSION "(${${PROJECT_NAME}_V_HI} << 8) + ${${PROJECT_NAME}_V_LO}")
 
 set(SRC

@@ -6,7 +6,7 @@
 namespace proto {
 
 constexpr auto kMarker = 0xBC;
-constexpr auto kMaxDataLen = 15;
+constexpr auto kMaxDataLen = 14;
 constexpr auto kMaxMsgLen = 8 + 256;
 
 enum class CmdType: uint8_t {
@@ -60,7 +60,7 @@ struct MeasurementAns {
   uint64_t time_utc_ms;
   uint8_t channel;
   float frequency;
-  int16_t temperature;
+  float resistance;
   uint8_t reason;
 };
 struct ReadDataReq {

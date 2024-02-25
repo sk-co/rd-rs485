@@ -27,36 +27,48 @@ namespace app {
 
 proto::Errors Measurement(uint32_t channel, proto::MeasurementAns *result) {
   board::InitAdc();
-  volatile auto start = GetSysMs();
+//  volatile auto start = GetSysMs();
   // Генерируем возбуждающий сигнал.
   Obj::ImpulseGenerator(channel)->Generate(conf::kFStart, conf::kFEnd, conf::kImpCount);
   // Ждем переходные процессы.
   DelayMs(conf::kWaitAfterGenerationMs);
   // Считываем сигнал, определяем частоту.
-  start = GetSysMs();
+//  start = GetSysMs();
   auto error = Obj::FreqReader(channel)->ReadData();
   if(error != proto::Errors::NO) {
     board::DeInitAdc();
     return error;
   }
-  volatile auto elapsed_time = GetSysMs() - start;
-  elapsed_time += 1;
+//  volatile auto elapsed_time = GetSysMs() - start;
+//  elapsed_time += 1;
   Obj::FreqReader(channel)->CalculateFreq(&result->frequency);
-  // Определяем температуру.
-  if(Obj::TemperatureSensor(channel)->GetValue(&result->temperature)) {
+  // Определяем сопротивление.
+  float resistance = 0;
+  if(Obj::TemperatureSensor(channel)->GetResistance(&resistance)) {
     board::DeInitAdc();
     return proto::Errors::ADC_ERROR;
   }
+  memcpy(&result->resistance, &resistance, sizeof(float));
   result->channel = channel + 1;
   result->reason = uint8_t(proto::MeasurementReason::REQUEST);
   result->time_utc_ms = app::time::GetUTCTime();
-  elapsed_time = GetSysMs() - start;
+//  elapsed_time = GetSysMs() - start;
 
-//  // Вывод сырых данных от тензометра в uart.
+  // Вывод сырых данных от тензометра в uart.
 //  Obj::FreqReader(channel)->OutData();
 
   board::DeInitAdc();
   return proto::Errors::NO;
+}
+void PrintResult() {
+  char str[128] = {};
+  sprintf(str, "Channel: %d, Resist: %0.3f, Freq: %0.3f\n", measurement_.channel,
+          measurement_.resistance, measurement_.frequency);
+  for(auto &ch: str)
+    if(ch == '.')
+      ch = ',';
+  LOG_TRC(str);
+  while(!LOG_IS_TRANSMITED());
 }
 
 void Init() {
@@ -75,9 +87,9 @@ void Init() {
 //  // Для проверки заполняем хранилище.
 //  storage_size_ = 3;
 //  for(uint32_t i=0; i < storage_size_; ++i) {
-//    storage_[i].channel = channel_;
+//    storage_[i].channel = 1;
 //    storage_[i].frequency = 812.4f + i*12;
-//    storage_[i].temperature = 25 + i;
+//    storage_[i].resistance = 50 + i*102.51;
 //    storage_[i].reason = uint8_t(proto::MeasurementReason::SIGNAL);
 //    storage_[i].time_utc_ms = app::time::GetUTCTime() + i*1000;
 //  }
@@ -127,9 +139,7 @@ void Work() {
         state_ = State::ERROR;
         break;
       }
-      LOG_TRC("Channel: %d, Temp: %d, Freq: %f\n", measurement_.channel,
-              measurement_.temperature, measurement_.frequency);
-      while(!LOG_IS_TRANSMITED());
+      PrintResult();
       state_ = State::SENDING_MEASUREMENT;
       board::led1.Off();
     }
@@ -159,20 +169,23 @@ void Work() {
       board::led1.Off();
       DelayMs(50);
       board::led1.On();
-      for(uint32_t channel = 0; channel < conf::kNChannels; ++channel) {
-        if (storage_size_ < conf::kStorageSize) {
-          error_ = Measurement(channel, &storage_[storage_size_]);
-          storage_[storage_size_].reason = uint8_t(proto::MeasurementReason::SIGNAL);
-          if(error_ != proto::Errors::NO) {
-            state_ = State::ERROR;
-            return;
-          }
-          storage_size_++;
-        }
-        board::led1.Off();
-        DelayMs(50);
-        board::led1.On();
-      }
+//      for(uint32_t channel = 0; channel < conf::kNChannels; ++channel) {
+//        if (storage_size_ < conf::kStorageSize) {
+//          error_ = Measurement(channel, &storage_[storage_size_]);
+//          storage_[storage_size_].reason = uint8_t(proto::MeasurementReason::SIGNAL);
+//          if(error_ != proto::Errors::NO) {
+//            state_ = State::ERROR;
+//            return;
+//          }
+//          storage_size_++;
+//        }
+//        board::led1.Off();
+//        DelayMs(50);
+//        board::led1.On();
+//      }
+
+      error_ = Measurement(3, &measurement_);
+      PrintResult();
       Obj::ExtSignal().StartWait();
       state_ = State::IDLE;
     }

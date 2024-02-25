@@ -122,7 +122,7 @@ void InitAdc() {
     ErrorHandler(nullptr);
   if(AdcConfigChannel(&board::adc1, ADC_CN_2))
     ErrorHandler(nullptr);
-  DefineVRef();
+//  DefineVRef();
 
   if(AdcInit(&board::sdadc1))
     ErrorHandler(nullptr);

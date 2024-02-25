@@ -20,7 +20,7 @@ Adc_t sdadc1;
 AdcChannelId_t tens_channel = ADC_CN_1;
 AdcChannelId_t temp_channel = ADC_CN_2;
 uint32_t vref = 3300;
-constexpr uint32_t kInternalVref = 1220;
+constexpr uint32_t kInternalVref = 1230;
 uint16_t adc_value = 0;
 bool adc_value_ready = false;
 uint32_t start_time_ = 0;
@@ -367,7 +367,7 @@ int DefineVRef() {
   ADC_ChannelConfTypeDef sConfig{
     .Channel = ADC_CHANNEL_VREFINT,
     .Rank = ADC_REGULAR_RANK_1,
-    .SamplingTime = ADC_SAMPLETIME_55CYCLES_5,
+    .SamplingTime = ADC_SAMPLETIME_239CYCLES_5,
   };
   if((HAL_ADC_ConfigChannel(&adc_hal, &sConfig) != HAL_OK))
     return 0;

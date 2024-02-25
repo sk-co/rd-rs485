@@ -14,8 +14,8 @@ FImpulseGenerator::FImpulseGenerator(PinNames pin_name,
 void FImpulseGenerator::Generate(int f_start,
                                  int f_end,
                                  int impulse_count) {
-  int f_count = f_end - f_start + 1;
-  float f_step = float(f_count) / float(impulse_count);
+//  int f_count = f_end - f_start + 1;
+//  float f_step = float(f_count) / float(impulse_count);
   board::GpioWrite(&pin_, 0);
   // Подаем питание на выход, ждем 200 мс.
   board::GpioWrite(&pin_in_en_, 0);

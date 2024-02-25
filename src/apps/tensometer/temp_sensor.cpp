@@ -4,6 +4,7 @@
 #include "board-gpio.h"
 #include "board-adc.h"
 #include "board-delay.h"
+#include "log.h"
 
 namespace {
 
@@ -289,5 +290,60 @@ int16_t TempSensor::GetTemperature(uint16_t adc_value, int r1) {
   }
   // Больше 150.
   return kStartTemp + kTableSize;
+}
+int TempSensor::GetResistance(float *resistance) {
+  board::AdcConfigChannel(adc_, channel_id_);
+  board::GpioWrite(&en_mode_110k_pin_, 1);
+  board::GpioWrite(&en_mode_2k_pin_, 0);
+  board::GpioWrite(&en_pin_, 1);
+  DelayMs(1);
+  board::AdcStart(adc_);
+  std::array<uint16_t,7> values = {};
+  for(auto &value: values){
+    value = board::AdcReadWithTimeout(adc_, 10);
+  }
+  std::sort(values.begin(), values.end());
+  uint16_t mid_value = values[3];
+  board::AdcStop(adc_);
+  board::GpioWrite(&en_mode_110k_pin_, 0);
+  if(mid_value == 0xFFFF) {
+    // Ошибка
+    board::GpioWrite(&en_pin_, 0);
+    return 1;
+  }
+  float voltage = float(mid_value)*(float(board::GetVRef())/1000.0f/4096);
+  if(voltage >= 0.13) {
+    board::GpioWrite(&en_pin_, 0);
+    *resistance = voltage*float(kR_110K)/(5.0f - voltage) - kResistanceCorrection_110k;
+
+    LOG_TRC("V: %0.3f, V_ref: %0.3f\n", voltage, board::GetVRef());
+    while(!LOG_IS_TRANSMITED());
+
+    return 0;
+  }
+  // Слишком малое значение, переключаемся на режим 2.
+  board::GpioWrite(&en_mode_2k_pin_, 1);
+  DelayMs(1);
+  board::AdcStart(adc_);
+  for(auto &value: values){
+    value = board::AdcReadWithTimeout(adc_, 10);
+  }
+  std::sort(values.begin(), values.end());
+  mid_value = values[3];
+  board::AdcStop(adc_);
+  board::GpioWrite(&en_mode_2k_pin_, 0);
+  if(mid_value == 0xFFFF) {
+    // Ошибка
+    board::GpioWrite(&en_pin_, 0);
+    return 1;
+  }
+  board::GpioWrite(&en_pin_, 0);
+  voltage = float(mid_value)*(float(board::GetVRef())/1000.0f/4096);
+  *resistance = voltage*float(kR_2K)/(5.0f - voltage) - kResistanceCorrection_2k;
+
+  LOG_TRC("V: %0.3f, V_ref: %0.3f\n", voltage, board::GetVRef());
+  while(!LOG_IS_TRANSMITED());
+
+  return 0;
 }
 }

@@ -38,7 +38,7 @@ class FAnswerReader {
   int ReadBlockData();
   void FilterData(uint32_t level, uint16_t* data, uint32_t len);
   BlockResult ProcessBlock(const uint16_t* data, uint32_t len);
-  bool ValidatePeriods(uint32_t len);
+  bool ValidatePeriods(uint32_t first_ind, uint32_t len);
   DataStat GetStat(const uint16_t *data, uint32_t len);
 
   Gpio_t pin_out_en_ = {};
